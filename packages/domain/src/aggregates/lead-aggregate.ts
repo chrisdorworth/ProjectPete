@@ -39,7 +39,7 @@ export interface LeadState {
   createdAt: Date;
 }
 
-export function createInitialLeadState(): LeadState {
+export function createInitialLeadState(now: Date = new Date()): LeadState {
   return {
     id: "",
     status: "new",
@@ -72,7 +72,7 @@ export function createInitialLeadState(): LeadState {
     firstSignalAt: null,
     lastSignalAt: null,
     version: 0,
-    createdAt: new Date(),
+    createdAt: now,
   };
 }
 

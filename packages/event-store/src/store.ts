@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { MeridianEvent } from "@meridian/domain";
 import { randomUUID } from "node:crypto";
 
@@ -28,47 +29,115 @@ export class EventStore {
   constructor(private readonly prisma: PrismaClient) {}
 
   async append(input: AppendEventInput): Promise<StoredEvent> {
-    if (input.idempotencyKey) {
-      const existing = await this.prisma.event.findUnique({
-        where: { idempotencyKey: input.idempotencyKey },
-      });
-      if (existing) {
-        return this.toStoredEvent(existing);
-      }
-    }
+    try {
+      const event = await this.prisma.$transaction(
+        async (tx) => {
+          if (input.idempotencyKey) {
+            const existing = await tx.event.findUnique({
+              where: { idempotencyKey: input.idempotencyKey },
+            });
+            if (existing) {
+              return existing;
+            }
+          }
 
-    const currentVersion = await this.getLatestVersion(input.aggregateId);
-    const nextVersion = currentVersion + 1;
+          const latest = await tx.event.findFirst({
+            where: { aggregateId: input.aggregateId },
+            orderBy: { version: "desc" },
+            select: { version: true },
+          });
+          const currentVersion = latest?.version ?? 0;
+          const nextVersion = currentVersion + 1;
 
-    if (input.expectedVersion !== undefined && currentVersion !== input.expectedVersion) {
-      throw new ConcurrencyError(
-        `Expected version ${input.expectedVersion} but found ${currentVersion} for aggregate ${input.aggregateId}`,
+          if (input.expectedVersion !== undefined && currentVersion !== input.expectedVersion) {
+            throw new ConcurrencyError(
+              `Expected version ${input.expectedVersion} but found ${currentVersion} for aggregate ${input.aggregateId}`,
+            );
+          }
+
+          return tx.event.create({
+            data: {
+              id: randomUUID(),
+              aggregateId: input.aggregateId,
+              aggregateType: input.aggregateType,
+              eventType: input.eventType,
+              version: nextVersion,
+              payload: input.payload,
+              metadata: input.metadata ?? {},
+              idempotencyKey: input.idempotencyKey ?? null,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
+
+      return this.toStoredEvent(event);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const meta = error.meta as { target?: string[] } | undefined;
+        if (meta?.target?.includes("idempotency_key") && input.idempotencyKey) {
+          const existing = await this.prisma.event.findUnique({
+            where: { idempotencyKey: input.idempotencyKey },
+          });
+          if (existing) {
+            return this.toStoredEvent(existing);
+          }
+        }
+      }
+      throw error;
     }
-
-    const event = await this.prisma.event.create({
-      data: {
-        id: randomUUID(),
-        aggregateId: input.aggregateId,
-        aggregateType: input.aggregateType,
-        eventType: input.eventType,
-        version: nextVersion,
-        payload: input.payload,
-        metadata: input.metadata ?? {},
-        idempotencyKey: input.idempotencyKey ?? null,
-      },
-    });
-
-    return this.toStoredEvent(event);
   }
 
   async appendBatch(events: AppendEventInput[]): Promise<StoredEvent[]> {
-    const results: StoredEvent[] = [];
-    for (const input of events) {
-      const stored = await this.append(input);
-      results.push(stored);
-    }
-    return results;
+    return this.prisma.$transaction(
+      async (tx) => {
+        const results: StoredEvent[] = [];
+        for (const input of events) {
+          if (input.idempotencyKey) {
+            const existing = await tx.event.findUnique({
+              where: { idempotencyKey: input.idempotencyKey },
+            });
+            if (existing) {
+              results.push(this.toStoredEvent(existing));
+              continue;
+            }
+          }
+
+          const latest = await tx.event.findFirst({
+            where: { aggregateId: input.aggregateId },
+            orderBy: { version: "desc" },
+            select: { version: true },
+          });
+          const currentVersion = latest?.version ?? 0;
+          const nextVersion = currentVersion + 1;
+
+          if (input.expectedVersion !== undefined && currentVersion !== input.expectedVersion) {
+            throw new ConcurrencyError(
+              `Expected version ${input.expectedVersion} but found ${currentVersion} for aggregate ${input.aggregateId}`,
+            );
+          }
+
+          const event = await tx.event.create({
+            data: {
+              id: randomUUID(),
+              aggregateId: input.aggregateId,
+              aggregateType: input.aggregateType,
+              eventType: input.eventType,
+              version: nextVersion,
+              payload: input.payload,
+              metadata: input.metadata ?? {},
+              idempotencyKey: input.idempotencyKey ?? null,
+            },
+          });
+          results.push(this.toStoredEvent(event));
+        }
+        return results;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   async readStream(aggregateId: string, fromVersion = 0): Promise<StoredEvent[]> {

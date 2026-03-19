@@ -1,10 +1,4 @@
-interface BaseEvent {
-  readonly id: string;
-  readonly aggregateId: string;
-  readonly version: number;
-  readonly timestamp: Date;
-  readonly metadata: Record<string, unknown>;
-}
+import type { BaseEvent } from "./base-event.js";
 
 export interface RapportExtracted extends BaseEvent {
   readonly type: "RapportExtracted";

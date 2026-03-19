@@ -1,12 +1,5 @@
 import type { OutreachChannel } from "../value-objects/outreach-channel.js";
-
-interface BaseEvent {
-  readonly id: string;
-  readonly aggregateId: string;
-  readonly version: number;
-  readonly timestamp: Date;
-  readonly metadata: Record<string, unknown>;
-}
+import type { BaseEvent } from "./base-event.js";
 
 export interface DraftGenerated extends BaseEvent {
   readonly type: "DraftGenerated";

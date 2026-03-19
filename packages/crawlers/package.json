@@ -18,7 +18,8 @@
     "@meridian/domain": "*",
     "cheerio": "^1.x",
     "playwright": "^1.x",
-    "robots-parser": "^3.x"
+    "robots-parser": "^3.x",
+    "zod": "^3.x"
   },
   "devDependencies": {
     "typescript": "^5.x",

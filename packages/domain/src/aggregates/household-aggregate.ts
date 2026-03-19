@@ -13,7 +13,7 @@ export interface HouseholdState {
   createdAt: Date;
 }
 
-export function createInitialHouseholdState(): HouseholdState {
+export function createInitialHouseholdState(now: Date = new Date()): HouseholdState {
   return {
     id: "",
     memberLeadIds: [],
@@ -24,7 +24,7 @@ export function createInitialHouseholdState(): HouseholdState {
     highestScore: 0,
     memberCount: 0,
     version: 0,
-    createdAt: new Date(),
+    createdAt: now,
   };
 }
 

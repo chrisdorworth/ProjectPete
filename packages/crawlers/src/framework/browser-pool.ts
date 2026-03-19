@@ -2,6 +2,14 @@ import type { Browser, Page, BrowserContext } from "playwright";
 
 const MAX_CONCURRENT = 4;
 const RECYCLE_AFTER_PAGES = 50;
+const USER_AGENT = "MeridianBot/1.0 (+https://meridian.example.com/bot)";
+
+const LAUNCH_ARGS = [
+  "--disable-dev-shm-usage",
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-gpu",
+];
 
 export class BrowserPool {
   private browser: Browser | null = null;
@@ -13,12 +21,7 @@ export class BrowserPool {
     const { chromium } = await import("playwright");
     this.browser = await chromium.launch({
       headless: true,
-      args: [
-        "--disable-dev-shm-usage",
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-gpu",
-      ],
+      args: LAUNCH_ARGS,
     });
   }
 
@@ -27,7 +30,8 @@ export class BrowserPool {
       await this.initialize();
     }
 
-    if (this.totalPages >= RECYCLE_AFTER_PAGES) {
+    // Only recycle when no pages are in-flight; otherwise defer to next opportunity
+    if (this.totalPages >= RECYCLE_AFTER_PAGES && this.activePages === 0) {
       await this.recycle();
     }
 
@@ -40,7 +44,7 @@ export class BrowserPool {
     this.activePages++;
     this.totalPages++;
     const context = await this.browser!.newContext({
-      userAgent: "MeridianBot/1.0 (+https://meridian.example.com/bot)",
+      userAgent: USER_AGENT,
       viewport: { width: 1280, height: 720 },
     });
     return context.newPage();
@@ -52,23 +56,63 @@ export class BrowserPool {
     await context.close();
     this.activePages--;
 
+    // If recycle threshold reached and this was the last active page, recycle now
+    if (this.totalPages >= RECYCLE_AFTER_PAGES && this.activePages === 0) {
+      await this.recycle();
+      return;
+    }
+
     if (this.waitQueue.length > 0) {
       const next = this.waitQueue.shift()!;
       this.activePages++;
       this.totalPages++;
-      const ctx = await this.browser!.newContext();
+      const ctx = await this.browser!.newContext({
+        userAgent: USER_AGENT,
+        viewport: { width: 1280, height: 720 },
+      });
       const newPage = await ctx.newPage();
       next(newPage);
     }
   }
 
   private async recycle(): Promise<void> {
-    if (this.browser) {
-      await this.browser.close();
+    // Safety: never recycle while pages are still active
+    if (this.activePages > 0) {
+      return;
     }
+
+    // Drain the wait queue so waiters don't resolve against a closed browser
+    const pendingWaiters = this.waitQueue.splice(0);
+
+    if (this.browser) {
+      try {
+        await this.browser.close();
+      } catch {
+        // Browser may already be disconnected; continue with relaunch
+      }
+      this.browser = null;
+    }
+
     this.totalPages = 0;
+
+    // Relaunch with the same launch args used in initialize()
     const { chromium } = await import("playwright");
-    this.browser = await chromium.launch({ headless: true });
+    this.browser = await chromium.launch({
+      headless: true,
+      args: LAUNCH_ARGS,
+    });
+
+    // Fulfil pending waiters with pages from the fresh browser
+    for (const waiter of pendingWaiters) {
+      this.activePages++;
+      this.totalPages++;
+      const ctx = await this.browser.newContext({
+        userAgent: USER_AGENT,
+        viewport: { width: 1280, height: 720 },
+      });
+      const newPage = await ctx.newPage();
+      waiter(newPage);
+    }
   }
 
   async close(): Promise<void> {

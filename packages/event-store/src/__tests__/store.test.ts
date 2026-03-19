@@ -3,7 +3,7 @@ import { EventStore, ConcurrencyError } from "../store.js";
 import type { AppendEventInput, StoredEvent } from "../store.js";
 
 function createMockPrisma() {
-  return {
+  const mock = {
     event: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -11,7 +11,13 @@ function createMockPrisma() {
       create: vi.fn(),
       count: vi.fn(),
     },
+    $transaction: vi.fn(),
   };
+  // By default, $transaction executes the callback with the mock itself as the tx client
+  mock.$transaction.mockImplementation(async (fn: (tx: typeof mock) => Promise<unknown>) => {
+    return fn(mock);
+  });
+  return mock;
 }
 
 type MockPrisma = ReturnType<typeof createMockPrisma>;

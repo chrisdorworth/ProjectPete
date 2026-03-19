@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { EventStore } from "@meridian/event-store";
 
 interface WebhookEvent {
@@ -9,9 +10,38 @@ interface WebhookEvent {
 }
 
 export class WebhookHandler {
-  constructor(private eventStore: EventStore) {}
+  private postmarkWebhookSecret: string;
+  private twilioAuthToken: string;
 
-  async handlePostmarkWebhook(payload: Record<string, unknown>): Promise<void> {
+  constructor(private eventStore: EventStore) {
+    this.postmarkWebhookSecret = process.env["POSTMARK_WEBHOOK_SECRET"] ?? "";
+    this.twilioAuthToken = process.env["TWILIO_AUTH_TOKEN"] ?? "";
+  }
+
+  /**
+   * Verifies an HMAC-SHA256 webhook signature.
+   * Returns true when the computed HMAC matches the provided signature.
+   */
+  private verifySignature(payload: string, signature: string, secret: string): boolean {
+    if (!secret || !signature) return false;
+    const expected = createHmac("sha256", secret).update(payload).digest("hex");
+    const sigBuf = Buffer.from(signature, "hex");
+    const expectedBuf = Buffer.from(expected, "hex");
+    if (sigBuf.length !== expectedBuf.length) return false;
+    return timingSafeEqual(sigBuf, expectedBuf);
+  }
+
+  async handlePostmarkWebhook(
+    payload: Record<string, unknown>,
+    rawBody?: string,
+    signature?: string,
+  ): Promise<void> {
+    // --- Verify webhook signature before processing ---
+    const body = rawBody ?? JSON.stringify(payload);
+    const sig = signature ?? (payload["_signature"] as string | undefined) ?? "";
+    if (!this.verifySignature(body, sig, this.postmarkWebhookSecret)) {
+      throw new Error("Invalid Postmark webhook signature – request rejected");
+    }
     const messageId = payload["MessageID"] as string;
     const recordType = payload["RecordType"] as string;
 
@@ -34,7 +64,18 @@ export class WebhookHandler {
     });
   }
 
-  async handleTwilioWebhook(payload: Record<string, unknown>): Promise<void> {
+  async handleTwilioWebhook(
+    payload: Record<string, unknown>,
+    rawBody?: string,
+    signature?: string,
+  ): Promise<void> {
+    // --- Verify webhook signature before processing ---
+    const body = rawBody ?? JSON.stringify(payload);
+    const sig = signature ?? (payload["_signature"] as string | undefined) ?? "";
+    if (!this.verifySignature(body, sig, this.twilioAuthToken)) {
+      throw new Error("Invalid Twilio webhook signature – request rejected");
+    }
+
     const messageSid = payload["MessageSid"] as string;
     const status = payload["MessageStatus"] as string;
 

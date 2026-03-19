@@ -1,4 +1,5 @@
 import type { SignalType } from "@meridian/domain";
+import { isAllowed, getCrawlDelay } from "./robots-parser.js";
 
 export interface CrawlResult {
   signals: ExtractedSignal[];
@@ -53,6 +54,9 @@ export abstract class BaseCrawler {
   private circuitOpenedAt: number | null = null;
   private readonly circuitResetMs = 300_000; // 5 minutes
 
+  /** Per-domain timestamps tracking the last request time */
+  private domainLastRequestAt = new Map<string, number>();
+
   constructor(config: Partial<CrawlerConfig> & Pick<CrawlerConfig, "name" | "tier">) {
     this.config = { ...DEFAULT_CONFIG, ...config } as CrawlerConfig;
   }
@@ -104,6 +108,56 @@ export abstract class BaseCrawler {
   }
 
   protected abstract crawl(): Promise<ExtractedSignal[]>;
+
+  /**
+   * Check robots.txt to see if the URL is allowed for our user agent.
+   * Returns false if the URL is disallowed and respectRobotsTxt is enabled.
+   */
+  protected async checkRobotsAllowed(url: string): Promise<boolean> {
+    if (!this.config.respectRobotsTxt) {
+      return true;
+    }
+    return isAllowed(url, this.config.userAgent);
+  }
+
+  /**
+   * Apply per-domain rate limiting. Uses the crawl-delay from robots.txt
+   * if available, otherwise falls back to config.requestDelayMs.
+   */
+  protected async delayForDomain(url: string): Promise<void> {
+    const host = new URL(url).host;
+
+    // Determine the effective delay: prefer robots.txt crawl-delay, fall back to config
+    const robotsDelay = getCrawlDelay(host, this.config.userAgent);
+    const effectiveDelayMs =
+      robotsDelay !== null
+        ? Math.max(robotsDelay * 1000, this.config.requestDelayMs)
+        : this.config.requestDelayMs;
+
+    const lastRequest = this.domainLastRequestAt.get(host);
+    if (lastRequest !== undefined) {
+      const elapsed = Date.now() - lastRequest;
+      const remaining = effectiveDelayMs - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+    }
+
+    this.domainLastRequestAt.set(host, Date.now());
+  }
+
+  /**
+   * Combined pre-request check: enforces robots.txt allowance and per-domain rate limit.
+   * Returns false if the URL is disallowed by robots.txt.
+   */
+  protected async preRequest(url: string): Promise<boolean> {
+    const allowed = await this.checkRobotsAllowed(url);
+    if (!allowed) {
+      return false;
+    }
+    await this.delayForDomain(url);
+    return true;
+  }
 
   protected async delay(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, this.config.requestDelayMs));

@@ -16,6 +16,8 @@ describe("OutreachDispatcher", () => {
 
   beforeEach(() => {
     dispatcher = new OutreachDispatcher();
+    // Register a permissive consent checker for tests
+    dispatcher.registerConsentChecker(async () => ({ consented: true }));
   });
 
   const baseSendParams = {

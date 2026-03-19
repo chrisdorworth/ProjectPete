@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 
 let client: Anthropic | null = null;
 
@@ -37,12 +38,86 @@ export interface NERResult {
   confidence: number;
 }
 
+const NERResultSchema = z.object({
+  persons: z.array(
+    z.object({
+      name: z.string(),
+      title: z.string().nullable(),
+      company: z.string().nullable(),
+      role: z.string().nullable(),
+    }),
+  ),
+  organizations: z.array(
+    z.object({
+      name: z.string(),
+      type: z.string().nullable(),
+    }),
+  ),
+  moneyAmounts: z.array(
+    z.object({
+      amount: z.string(),
+      context: z.string(),
+    }),
+  ),
+  locations: z.array(
+    z.object({
+      city: z.string().nullable(),
+      county: z.string().nullable(),
+      state: z.string().nullable(),
+    }),
+  ),
+  dates: z.array(
+    z.object({
+      date: z.string(),
+      context: z.string(),
+    }),
+  ),
+  eventType: z
+    .enum([
+      "deed_transfer",
+      "business_dissolution",
+      "probate_filing",
+      "court_settlement",
+      "professional_retirement",
+      "liquidity_event",
+      "executive_change",
+      "acquisition",
+    ])
+    .nullable(),
+  confidence: z.number().min(0).max(1),
+});
+
+/**
+ * Sanitize crawled text before inserting into the AI prompt.
+ * Strips patterns that could be used for prompt injection:
+ * - Lines that look like system/assistant role markers
+ * - Markdown-style instruction overrides
+ * - Common injection delimiters
+ */
+function sanitizeForPrompt(text: string): string {
+  return text
+    // Strip lines that attempt role impersonation
+    .replace(/^(system|assistant|human)\s*:/gim, "[filtered]:")
+    // Strip common prompt injection delimiters
+    .replace(/<\/?(?:system|prompt|instruction|message)[^>]*>/gi, "")
+    // Strip attempts to close/reopen prompt blocks
+    .replace(/```\s*(?:system|prompt|instruction)/gi, "```")
+    // Strip "ignore previous instructions" style attacks
+    .replace(/ignore\s+(all\s+)?(previous|above|prior)\s+(instructions|prompts|rules)/gi, "[filtered]")
+    // Strip lines that try to redefine the task
+    .replace(/^(?:new\s+)?(?:task|instruction|rule|prompt)\s*:/gim, "[filtered]:")
+    // Limit consecutive newlines to reduce whitespace injection
+    .replace(/\n{4,}/g, "\n\n\n");
+}
+
 export async function extractEntities(
   text: string,
   context: string,
 ): Promise<NERResult> {
   const anthropic = getClient();
   const model = process.env["CLAUDE_MODEL"] ?? "claude-sonnet-4-20250514";
+
+  const sanitizedText = sanitizeForPrompt(text.slice(0, 4000));
 
   const response = await anthropic.messages.create({
     model,
@@ -60,20 +135,25 @@ export async function extractEntities(
 - confidence: 0.0-1.0
 
 TEXT:
-${text.slice(0, 4000)}
+${sanitizedText}
 
 Return ONLY valid JSON, no other text.`,
       },
     ],
   });
 
-  const content = response.content[0];
-  if (content.type !== "text") {
+  const content = response.content[0] as { type: string; text?: string } | undefined;
+  if (!content || content.type !== "text") {
     return emptyNERResult();
   }
 
   try {
-    return JSON.parse(content.text) as NERResult;
+    const parsed = JSON.parse(content.text);
+    const validated = NERResultSchema.safeParse(parsed);
+    if (!validated.success) {
+      return emptyNERResult();
+    }
+    return validated.data;
   } catch {
     return emptyNERResult();
   }

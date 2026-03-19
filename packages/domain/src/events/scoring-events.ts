@@ -1,12 +1,5 @@
 import type { ScoreBreakdown } from "../value-objects/score.js";
-
-interface BaseEvent {
-  readonly id: string;
-  readonly aggregateId: string;
-  readonly version: number;
-  readonly timestamp: Date;
-  readonly metadata: Record<string, unknown>;
-}
+import type { BaseEvent } from "./base-event.js";
 
 export interface LeadScored extends BaseEvent {
   readonly type: "LeadScored";

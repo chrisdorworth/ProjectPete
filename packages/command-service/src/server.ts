@@ -9,6 +9,11 @@ import { outreachHandler } from "./handlers/outreach-handler.js";
 import { dispositionHandler } from "./handlers/disposition-handler.js";
 import { complianceHandler } from "./handlers/compliance-handler.js";
 import { authMiddleware } from "./middleware/auth.js";
+import {
+  registerSecurityHeaders,
+  validateContentType,
+  createCsrfProtection,
+} from "./middleware/security.js";
 
 const server = Fastify({
   logger: {
@@ -25,6 +30,13 @@ async function start(): Promise<void> {
   await server.register(rateLimit, {
     max: 100,
     timeWindow: "1 minute",
+  });
+
+  // Security middleware
+  await registerSecurityHeaders(server);
+  server.addHook("onRequest", createCsrfProtection());
+  server.addHook("onRequest", async (request, reply) => {
+    validateContentType(request, reply);
   });
 
   server.addHook("onRequest", authMiddleware);
@@ -51,7 +63,7 @@ async function start(): Promise<void> {
 }
 
 start().catch((err) => {
-  console.error("Failed to start command service:", err);
+  server.log.error(err, "Failed to start command service");
   process.exit(1);
 });
 

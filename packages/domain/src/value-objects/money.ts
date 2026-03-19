@@ -30,7 +30,11 @@ export class Money {
   }
 
   subtract(other: Money): Money {
-    return new Money(this.cents - other.cents);
+    const result = this.cents - other.cents;
+    if (result < 0n) {
+      throw new Error("Money cannot be negative: subtraction would result in negative value");
+    }
+    return new Money(result);
   }
 
   multiply(factor: number): Money {

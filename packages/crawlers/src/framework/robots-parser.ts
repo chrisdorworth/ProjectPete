@@ -1,6 +1,7 @@
 import robotsParser from "robots-parser";
 
-const robotsCache = new Map<string, { rules: ReturnType<typeof robotsParser>; expiresAt: number }>();
+type RobotsRules = ReturnType<typeof robotsParser>;
+const robotsCache = new Map<string, { rules: RobotsRules; expiresAt: number }>();
 const CACHE_TTL_MS = 3600_000; // 1 hour
 
 export async function isAllowed(

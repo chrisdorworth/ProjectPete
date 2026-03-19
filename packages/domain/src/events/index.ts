@@ -1,3 +1,5 @@
+export type { BaseEvent } from "./base-event.js";
+
 export type {
   SignalDetected,
   SignalValidated,

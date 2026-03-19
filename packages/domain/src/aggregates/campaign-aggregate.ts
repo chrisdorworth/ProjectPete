@@ -19,7 +19,7 @@ export interface CampaignState {
   version: number;
 }
 
-export function createDefaultCampaign(leadId: string, signalType: string): CampaignState {
+export function createDefaultCampaign(leadId: string, signalType: string, now: Date = new Date()): CampaignState {
   const steps = getStepsForSignalType(signalType);
   return {
     id: "",
@@ -27,7 +27,7 @@ export function createDefaultCampaign(leadId: string, signalType: string): Campa
     steps,
     currentStep: 0,
     status: "active",
-    startedAt: new Date(),
+    startedAt: now,
     lastStepAt: null,
     version: 0,
   };
@@ -63,13 +63,13 @@ export function getNextStep(state: CampaignState): CampaignStep | null {
   return state.steps[state.currentStep] ?? null;
 }
 
-export function advanceCampaign(state: CampaignState): CampaignState {
+export function advanceCampaign(state: CampaignState, now: Date = new Date()): CampaignState {
   const nextStep = state.currentStep + 1;
   return {
     ...state,
     currentStep: nextStep,
     status: nextStep >= state.steps.length ? "completed" : "active",
-    lastStepAt: new Date(),
+    lastStepAt: now,
   };
 }
 

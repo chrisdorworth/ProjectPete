@@ -22,7 +22,7 @@ model Event {
   idempotencyKey String?  @unique @map("idempotency_key")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  @@index([aggregateId, version])
+  @@unique([aggregateId, version])
   @@index([eventType])
   @@index([createdAt])
   @@map("events")

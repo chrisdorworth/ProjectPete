@@ -3,6 +3,8 @@
  * Pure function — no I/O dependencies (RULE-16).
  */
 
+import { normalizeAddress } from "./normalize-address.js";
+
 export interface DedupCandidate {
   id: string;
   fullName: string | null;
@@ -83,23 +85,6 @@ function normalizeEmail(email: string): string {
 
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "").slice(-10);
-}
-
-function normalizeAddress(address: string): string {
-  return address
-    .toLowerCase()
-    .replace(/\bstreet\b/g, "st")
-    .replace(/\bavenue\b/g, "ave")
-    .replace(/\bdrive\b/g, "dr")
-    .replace(/\broad\b/g, "rd")
-    .replace(/\bboulevard\b/g, "blvd")
-    .replace(/\blane\b/g, "ln")
-    .replace(/\bcourt\b/g, "ct")
-    .replace(/\bapartment\b/g, "apt")
-    .replace(/\bsuite\b/g, "ste")
-    .replace(/[.,#]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 /**

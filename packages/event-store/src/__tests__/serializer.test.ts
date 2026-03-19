@@ -186,7 +186,7 @@ describe("Serializer", () => {
       };
 
       const event = deserializeEvent(stored);
-      expect(event.payload).toEqual({ newValueCents: "5000000", memberCount: 2 });
+      expect(event.payload).toEqual({ newValueCents: BigInt(5000000), memberCount: 2 });
     });
   });
 

@@ -14,6 +14,7 @@ import { meetingPrepRoutes } from "./routes/meeting-prep.js";
 import { territoryRoutes } from "./routes/territory.js";
 import { healthRoutes } from "./routes/health.js";
 import { authMiddleware } from "./middleware/auth.js";
+import { registerValidation } from "./middleware/validation.js";
 
 const server = Fastify({
   logger: {
@@ -31,6 +32,9 @@ async function start(): Promise<void> {
     max: 200,
     timeWindow: "1 minute",
   });
+
+  // Input validation middleware
+  await registerValidation(server);
 
   server.addHook("onRequest", authMiddleware);
 
@@ -55,7 +59,7 @@ async function start(): Promise<void> {
 }
 
 start().catch((err) => {
-  console.error("Failed to start query service:", err);
+  server.log.error(err, "Failed to start query service");
   process.exit(1);
 });
 

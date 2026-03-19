@@ -1,12 +1,12 @@
 export interface ScoreBreakdown {
-  signalStrength: number;
-  estimatedValue: number;
-  timing: number;
-  accessibility: number;
-  complexity: number;
-  convergenceBonus: number;
-  intentBonus: number;
-  warmPathBonus: number;
+  readonly signalStrength: number;
+  readonly estimatedValue: number;
+  readonly timing: number;
+  readonly accessibility: number;
+  readonly complexity: number;
+  readonly convergenceBonus: number;
+  readonly intentBonus: number;
+  readonly warmPathBonus: number;
 }
 
 export class CompositeScore {
