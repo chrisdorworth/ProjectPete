@@ -1,0 +1,27 @@
+{
+  "name": "@meridian/crawlers",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@meridian/domain": "*",
+    "cheerio": "^1.x",
+    "playwright": "^1.x",
+    "robots-parser": "^3.x"
+  },
+  "devDependencies": {
+    "typescript": "^5.x",
+    "vitest": "^3.x"
+  }
+}

@@ -1,0 +1,224 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: meridian-pg
+    restart: always
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: meridian
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-events:
+    image: postgres:16-alpine
+    container_name: meridian-pg-events
+    restart: always
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: meridian_events
+    volumes:
+      - pg_events_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: meridian-redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: meridian-neo4j
+    restart: always
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc"]'
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "neo4j", "status"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  command-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.command
+    container_name: meridian-command
+    restart: always
+    environment:
+      - DATABASE_EVENT_STORE_URL=postgresql://${PG_USER}:${PG_PASSWORD}@postgres-events:5432/meridian_events
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      postgres-events:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.command.rule=Host(`api.${DOMAIN}`) && PathPrefix(`/command`)"
+      - "traefik.http.routers.command.tls.certresolver=letsencrypt"
+      - "traefik.http.services.command.loadbalancer.server.port=3001"
+
+  query-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.query
+    container_name: meridian-query
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/meridian
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.query.rule=Host(`api.${DOMAIN}`) && PathPrefix(`/query`)"
+      - "traefik.http.routers.query.tls.certresolver=letsencrypt"
+      - "traefik.http.services.query.loadbalancer.server.port=3002"
+
+  workers:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.workers
+    container_name: meridian-workers
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/meridian
+      - DATABASE_EVENT_STORE_URL=postgresql://${PG_USER}:${PG_PASSWORD}@postgres-events:5432/meridian_events
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ML_SERVICE_URL=http://ml-service:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-events:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: meridian-dashboard
+    restart: always
+    environment:
+      - NEXT_PUBLIC_API_URL=https://api.${DOMAIN}
+      - NEXT_PUBLIC_WS_URL=wss://api.${DOMAIN}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
+
+  ml-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ml
+    container_name: meridian-ml
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/meridian
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  traefik:
+    image: traefik:v3.2
+    container_name: meridian-traefik
+    restart: always
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt_data:/letsencrypt
+
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: meridian-prometheus
+    restart: always
+    volumes:
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: meridian-grafana
+    restart: always
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  loki:
+    image: grafana/loki:3.3.0
+    container_name: meridian-loki
+    restart: always
+    volumes:
+      - loki_data:/loki
+
+volumes:
+  pg_data:
+  pg_events_data:
+  redis_data:
+  neo4j_data:
+  letsencrypt_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:

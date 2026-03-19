@@ -1,0 +1,18 @@
+export { EnrichmentOrchestrator } from "./orchestrator.js";
+export type { EnrichmentProvider, EnrichmentInput, EnrichedData, ProviderResult } from "./orchestrator.js";
+export { createGoldenRecord, shouldMerge } from "./merge-engine.js";
+export { findHouseholdLinks } from "./household-linker.js";
+export { estimateWealth } from "./wealth-estimator.js";
+export { getProviderConfidence, combineConfidences } from "./confidence-scorer.js";
+export { ApolloProvider } from "./providers/apollo/client.js";
+export { ApolloMockProvider } from "./providers/apollo/mock.js";
+export { HunterProvider } from "./providers/hunter/client.js";
+export { HunterMockProvider } from "./providers/hunter/mock.js";
+export { ClearbitProvider } from "./providers/clearbit/client.js";
+export { ClearbitMockProvider } from "./providers/clearbit/mock.js";
+export { WhitepagesProvider } from "./providers/whitepages/client.js";
+export { WhitepagesMockProvider } from "./providers/whitepages/mock.js";
+export { PiplProvider } from "./providers/pipl/client.js";
+export { PiplMockProvider } from "./providers/pipl/mock.js";
+export { BomboraProvider } from "./providers/bombora/client.js";
+export { BomboraMockProvider } from "./providers/bombora/mock.js";

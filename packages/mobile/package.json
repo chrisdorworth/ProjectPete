@@ -1,0 +1,27 @@
+{
+  "name": "@meridian/mobile",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "expo start",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "expo": "^52.x",
+    "expo-linking": "^7.x",
+    "expo-notifications": "^0.x",
+    "react-native": "^0.x"
+  },
+  "devDependencies": {
+    "typescript": "^5.x",
+    "vitest": "^3.x"
+  }
+}

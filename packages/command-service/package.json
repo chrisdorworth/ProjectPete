@@ -1,0 +1,32 @@
+{
+  "name": "@meridian/command-service",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.x",
+    "@fastify/rate-limit": "^10.x",
+    "@fastify/websocket": "^11.x",
+    "@meridian/domain": "*",
+    "@meridian/event-store": "*",
+    "argon2": "^0.x",
+    "fastify": "^5.x",
+    "jsonwebtoken": "^9.x",
+    "zod": "^3.x"
+  },
+  "devDependencies": {
+    "typescript": "^5.x",
+    "vitest": "^3.x"
+  }
+}

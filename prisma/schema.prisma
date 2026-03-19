@@ -1,0 +1,437 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────
+// EVENT STORE (append-only)
+// ──────────────────────────────────────────────
+
+model Event {
+  id             String   @id @default(uuid())
+  aggregateId    String   @map("aggregate_id")
+  aggregateType  String   @map("aggregate_type")
+  eventType      String   @map("event_type")
+  version        Int
+  payload        Json
+  metadata       Json     @default("{}")
+  idempotencyKey String?  @unique @map("idempotency_key")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([aggregateId, version])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("events")
+}
+
+model Snapshot {
+  id            String   @id @default(uuid())
+  aggregateId   String   @map("aggregate_id")
+  aggregateType String   @map("aggregate_type")
+  version       Int
+  state         Json
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([aggregateId, version])
+  @@map("snapshots")
+}
+
+// ──────────────────────────────────────────────
+// PROJECTIONS (read-side, rebuildable)
+// ──────────────────────────────────────────────
+
+model Lead {
+  id                    String          @id @default(uuid())
+  externalId            String?         @unique @map("external_id")
+  status                String          @default("new")
+  firstName             String?         @map("first_name")
+  lastName              String?         @map("last_name")
+  fullName              String?         @map("full_name")
+  email                 String?
+  emailConfidence       Float?          @map("email_confidence")
+  phone                 String?
+  phoneType             String?         @map("phone_type")
+  cellPhone             String?         @map("cell_phone")
+  homeAddress           String?         @map("home_address")
+  city                  String?
+  state                 String?
+  zipCode               String?         @map("zip_code")
+  county                String?
+  linkedinUrl           String?         @map("linkedin_url")
+  company               String?
+  title                 String?
+  industry              String?
+  ageEstimate           Int?            @map("age_estimate")
+  isProfessional        Boolean         @default(false) @map("is_professional")
+  professionalSuffix    String?         @map("professional_suffix")
+
+  // Scoring
+  compositeScore        Int             @default(0) @map("composite_score")
+  qualitativeScore      Int             @default(0) @map("qualitative_score")
+  quantitativeScore     Int             @default(0) @map("quantitative_score")
+  scoreBreakdown        Json?           @map("score_breakdown")
+  scoredAt              DateTime?       @map("scored_at")
+
+  // Value
+  estimatedValueCents   BigInt          @default(0) @map("estimated_value_cents")
+  wealthEstimateCents   BigInt?         @map("wealth_estimate_cents")
+
+  // Enrichment
+  enrichmentStatus      String          @default("pending") @map("enrichment_status")
+  enrichmentCompleteness Float          @default(0) @map("enrichment_completeness")
+
+  // Intelligence
+  summary               String?
+  rapportHooks          Json?           @map("rapport_hooks")
+  rapportHookCount      Int             @default(0) @map("rapport_hook_count")
+  hasWarmPath           Boolean         @default(false) @map("has_warm_path")
+  warmPaths             Json?           @map("warm_paths")
+  competitorDetected    Boolean         @default(false) @map("competitor_detected")
+
+  // Assignment
+  assignedRepId         String?         @map("assigned_rep_id")
+  territoryId           String?         @map("territory_id")
+
+  // Household
+  householdId           String?         @map("household_id")
+  household             Household?      @relation(fields: [householdId], references: [id])
+
+  // Suppression / Compliance
+  isSuppressed          Boolean         @default(false) @map("is_suppressed")
+  suppressionReason     String?         @map("suppression_reason")
+  suppressedAt          DateTime?       @map("suppressed_at")
+  isDeceased            Boolean         @default(false) @map("is_deceased")
+  doNotContact          Boolean         @default(false) @map("do_not_contact")
+
+  // GDPR/CCPA
+  consentStatus         String?         @map("consent_status")
+  dataExportedAt        DateTime?       @map("data_exported_at")
+  purgedAt              DateTime?       @map("purged_at")
+
+  // Timestamps
+  firstSignalAt         DateTime?       @map("first_signal_at")
+  lastSignalAt          DateTime?       @map("last_signal_at")
+  lastContactAt         DateTime?       @map("last_contact_at")
+  lastEnrichedAt        DateTime?       @map("last_enriched_at")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  signals               Signal[]
+  enrichments           Enrichment[]
+  outreachAttempts      OutreachAttempt[]
+  dispositions          Disposition[]
+  timelineEntries       TimelineEntry[]
+
+  @@index([status])
+  @@index([compositeScore(sort: Desc)])
+  @@index([county])
+  @@index([assignedRepId])
+  @@index([householdId])
+  @@index([isSuppressed])
+  @@index([createdAt])
+  @@index([lastSignalAt])
+  @@map("leads")
+}
+
+model Signal {
+  id                String      @id @default(uuid())
+  leadId            String?     @map("lead_id")
+  lead              Lead?       @relation(fields: [leadId], references: [id])
+  signalType        String      @map("signal_type")
+  source            String
+  sourceUrl         String?     @map("source_url")
+  sourceTier        Int         @map("source_tier")
+  confidence        Float       @default(0)
+  rawData           Json        @map("raw_data")
+  extractedData     Json?       @map("extracted_data")
+  estimatedValueCents BigInt?   @map("estimated_value_cents")
+  county            String?
+  state             String?
+  idempotencyKey    String      @unique @map("idempotency_key")
+  isDuplicate       Boolean     @default(false) @map("is_duplicate")
+  validatedAt       DateTime?   @map("validated_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  @@index([signalType])
+  @@index([leadId])
+  @@index([source])
+  @@index([createdAt])
+  @@map("signals")
+}
+
+model Household {
+  id                    String   @id @default(uuid())
+  name                  String?
+  address               String?
+  city                  String?
+  state                 String?
+  zipCode               String?  @map("zip_code")
+  county                String?
+  memberCount           Int      @default(0) @map("member_count")
+  combinedValueCents    BigInt   @default(0) @map("combined_value_cents")
+  combinedWealthCents   BigInt   @default(0) @map("combined_wealth_cents")
+  highestScore          Int      @default(0) @map("highest_score")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  members               Lead[]
+
+  @@index([county])
+  @@index([highestScore(sort: Desc)])
+  @@map("households")
+}
+
+model Enrichment {
+  id              String   @id @default(uuid())
+  leadId          String   @map("lead_id")
+  lead            Lead     @relation(fields: [leadId], references: [id])
+  provider        String
+  status          String   @default("pending")
+  requestedAt     DateTime @default(now()) @map("requested_at")
+  completedAt     DateTime? @map("completed_at")
+  rawResponse     Json?    @map("raw_response")
+  extractedFields Json?    @map("extracted_fields")
+  confidence      Float?
+  costCents       Int?     @map("cost_cents")
+  errorMessage    String?  @map("error_message")
+
+  @@index([leadId])
+  @@index([provider])
+  @@index([status])
+  @@map("enrichments")
+}
+
+model OutreachAttempt {
+  id              String    @id @default(uuid())
+  leadId          String    @map("lead_id")
+  lead            Lead      @relation(fields: [leadId], references: [id])
+  channel         String
+  status          String    @default("draft")
+  draftContent    String?   @map("draft_content")
+  draftVariant    String?   @map("draft_variant")
+  finalContent    String?   @map("final_content")
+
+  // Compliance
+  complianceStatus  String  @default("pending") @map("compliance_status")
+  complianceReviewedAt DateTime? @map("compliance_reviewed_at")
+  complianceNotes   String? @map("compliance_notes")
+
+  // Tracking
+  sentAt          DateTime? @map("sent_at")
+  deliveredAt     DateTime? @map("delivered_at")
+  openedAt        DateTime? @map("opened_at")
+  clickedAt       DateTime? @map("clicked_at")
+  repliedAt       DateTime? @map("replied_at")
+  bouncedAt       DateTime? @map("bounced_at")
+  unsubscribedAt  DateTime? @map("unsubscribed_at")
+
+  // External IDs
+  externalMessageId String? @map("external_message_id")
+  trackingId      String?   @map("tracking_id")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([leadId])
+  @@index([channel])
+  @@index([status])
+  @@index([sentAt])
+  @@map("outreach_attempts")
+}
+
+model Disposition {
+  id            String    @id @default(uuid())
+  leadId        String    @map("lead_id")
+  lead          Lead      @relation(fields: [leadId], references: [id])
+  type          String
+  notes         String?
+  aumCents      BigInt?   @map("aum_cents")
+  reason        String?
+  repId         String?   @map("rep_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([leadId])
+  @@index([type])
+  @@map("dispositions")
+}
+
+model TimelineEntry {
+  id          String   @id @default(uuid())
+  leadId      String   @map("lead_id")
+  lead        Lead     @relation(fields: [leadId], references: [id])
+  eventType   String   @map("event_type")
+  title       String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([leadId, createdAt])
+  @@map("timeline_entries")
+}
+
+model CrawlerRun {
+  id          String    @id @default(uuid())
+  crawlerName String    @map("crawler_name")
+  status      String    @default("running")
+  signalsFound Int      @default(0) @map("signals_found")
+  errorsCount  Int      @default(0) @map("errors_count")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  metadata    Json?
+  errorLog    String?   @map("error_log")
+
+  @@index([crawlerName])
+  @@index([startedAt])
+  @@map("crawler_runs")
+}
+
+model SuppressionList {
+  id          String   @id @default(uuid())
+  email       String?
+  phone       String?
+  reason      String
+  source      String
+  permanent   Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  expiresAt   DateTime? @map("expires_at")
+
+  @@index([email])
+  @@index([phone])
+  @@map("suppression_list")
+}
+
+model ComplianceAudit {
+  id          String   @id @default(uuid())
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  action      String
+  details     Json?
+  performedBy String?  @map("performed_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("compliance_audit")
+}
+
+// ──────────────────────────────────────────────
+// ML FEATURE STORE
+// ──────────────────────────────────────────────
+
+model FeatureRow {
+  id                          String   @id @default(uuid())
+  leadId                      String   @unique @map("lead_id")
+  signalCount                 Int      @default(0) @map("signal_count")
+  signalTypePrimary           String?  @map("signal_type_primary")
+  signalValueCents            BigInt   @default(0) @map("signal_value_cents")
+  signalRecencyDays           Int?     @map("signal_recency_days")
+  multiSignalFlag             Boolean  @default(false) @map("multi_signal_flag")
+  enrichmentCompleteness      Float    @default(0) @map("enrichment_completeness")
+  emailConfidence             Float    @default(0) @map("email_confidence")
+  hasCellPhone                Boolean  @default(false) @map("has_cell_phone")
+  hasHomeAddress              Boolean  @default(false) @map("has_home_address")
+  networkProximity            Int?     @map("network_proximity")
+  hasWarmPath                 Boolean  @default(false) @map("has_warm_path")
+  intentScore                 Int      @default(0) @map("intent_score")
+  intentKeywordMatch          Boolean  @default(false) @map("intent_keyword_match")
+  householdSize               Int      @default(1) @map("household_size")
+  householdValueCents         BigInt   @default(0) @map("household_value_cents")
+  ageEstimate                 Int?     @map("age_estimate")
+  isProfessional              Boolean  @default(false) @map("is_professional")
+  almaMaterTier               Int?     @map("alma_mater_tier")
+  rapportHookCount            Int      @default(0) @map("rapport_hook_count")
+  countyConversionRate        Float?   @map("county_conversion_rate")
+  signalSourceConversionRate  Float?   @map("signal_source_conversion_rate")
+
+  // Label (for training)
+  outcome                     String?
+  outcomeCapturedAt           DateTime? @map("outcome_captured_at")
+
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_store")
+}
+
+model ModelVersion {
+  id          String   @id @default(uuid())
+  modelName   String   @map("model_name")
+  version     String
+  metrics     Json
+  artifactPath String  @map("artifact_path")
+  isActive    Boolean  @default(false) @map("is_active")
+  trainedAt   DateTime @default(now()) @map("trained_at")
+  deployedAt  DateTime? @map("deployed_at")
+
+  @@unique([modelName, version])
+  @@index([modelName, isActive])
+  @@map("model_versions")
+}
+
+model Experiment {
+  id            String    @id @default(uuid())
+  name          String
+  description   String?
+  controlModel  String    @map("control_model")
+  treatmentModel String   @map("treatment_model")
+  splitRatio    Float     @default(0.5) @map("split_ratio")
+  status        String    @default("active")
+  startedAt     DateTime  @default(now()) @map("started_at")
+  endedAt       DateTime? @map("ended_at")
+  results       Json?
+
+  @@map("experiments")
+}
+
+// ──────────────────────────────────────────────
+// USER / AUTH
+// ──────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  name          String
+  role          String   @default("rep")
+  isActive      Boolean  @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Territory {
+  id          String   @id @default(uuid())
+  name        String
+  repId       String   @map("rep_id")
+  zipCodes    String[] @map("zip_codes")
+  counties    String[]
+  capacityCap Int      @default(100) @map("capacity_cap")
+  currentLoad Int      @default(0) @map("current_load")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([repId])
+  @@map("territories")
+}
+
+// ──────────────────────────────────────────────
+// PROJECTION CHECKPOINT
+// ──────────────────────────────────────────────
+
+model ProjectionCheckpoint {
+  id              String   @id @default(uuid())
+  projectionName  String   @unique @map("projection_name")
+  lastEventId     String   @map("last_event_id")
+  lastEventAt     DateTime @map("last_event_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("projection_checkpoints")
+}

@@ -1,0 +1,78 @@
+groups:
+  - name: meridian-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value }} req/s on {{ $labels.job }}"
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 > 512
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.job }}"
+          description: "Memory usage is {{ $value }}MB"
+
+      - alert: SlowResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow response times on {{ $labels.job }}"
+          description: "P95 latency is {{ $value }}s"
+
+      - alert: CrawlerFailures
+        expr: increase(crawler_failures_total[1h]) > 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Crawler {{ $labels.crawler }} has high failure rate"
+
+      - alert: QueueBacklog
+        expr: bull_queue_waiting > 1000
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue {{ $labels.queue }} has large backlog"
+          description: "{{ $value }} jobs waiting"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_activity_count > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL connection pool near limit"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage above 85%"
+
+      - alert: DiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.15
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space below 15%"

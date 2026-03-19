@@ -1,0 +1,32 @@
+{
+  "name": "@meridian/queue",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@meridian/crawlers": "*",
+    "@meridian/domain": "*",
+    "@meridian/enrichment": "*",
+    "@meridian/event-store": "*",
+    "@meridian/graph": "*",
+    "@meridian/intelligence": "*",
+    "@meridian/projections": "*",
+    "bullmq": "^5.x",
+    "ioredis": "^5.x"
+  },
+  "devDependencies": {
+    "typescript": "^5.x",
+    "vitest": "^3.x"
+  }
+}

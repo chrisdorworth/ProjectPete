@@ -1,0 +1,23 @@
+{
+  "name": "@meridian/outreach-integrations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@meridian/domain": "*",
+    "postmark": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.0",
+    "vitest": "^3.0.0"
+  }
+}

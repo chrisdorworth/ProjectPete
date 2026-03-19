@@ -1,0 +1,39 @@
+FROM node:22-alpine AS base
+RUN apk add --no-cache chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json package-lock.json* ./
+COPY packages/domain/package.json ./packages/domain/
+COPY packages/event-store/package.json ./packages/event-store/
+COPY packages/projections/package.json ./packages/projections/
+COPY packages/crawlers/package.json ./packages/crawlers/
+COPY packages/enrichment/package.json ./packages/enrichment/
+COPY packages/intelligence/package.json ./packages/intelligence/
+COPY packages/graph/package.json ./packages/graph/
+COPY packages/queue/package.json ./packages/queue/
+COPY prisma/schema.prisma ./prisma/
+RUN npm ci --workspace=packages/queue --include-workspace-root
+
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npx prisma generate --schema=prisma/schema.prisma
+RUN npm run build --workspace=packages/domain
+RUN npm run build --workspace=packages/event-store
+RUN npm run build --workspace=packages/projections
+RUN npm run build --workspace=packages/crawlers
+RUN npm run build --workspace=packages/enrichment
+RUN npm run build --workspace=packages/intelligence
+RUN npm run build --workspace=packages/graph
+RUN npm run build --workspace=packages/queue
+
+FROM base AS runner
+ENV NODE_ENV=production
+COPY --from=builder /app/packages /app/packages
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+
+CMD ["node", "packages/queue/dist/index.js"]
