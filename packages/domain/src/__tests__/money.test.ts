@@ -61,4 +61,30 @@ describe("Money", () => {
     const m = Money.fromDollars(0.1 + 0.2);
     expect(typeof m.cents).toBe("bigint");
   });
+
+  it("rejects negative cents", () => {
+    expect(() => Money.fromCents(-100)).toThrow("Money cannot be negative");
+  });
+
+  it("rejects negative dollars", () => {
+    expect(() => Money.fromDollars(-50)).toThrow("Money cannot be negative");
+  });
+
+  it("rejects negative multiply factor", () => {
+    const m = Money.fromCents(100);
+    expect(() => m.multiply(-1)).toThrow("Money multiply factor cannot be negative");
+  });
+
+  it("converts to dollars correctly", () => {
+    const m = Money.fromCents(12345);
+    expect(m.toDollars()).toBe(123.45);
+  });
+
+  it("handles equality", () => {
+    const a = Money.fromCents(100);
+    const b = Money.fromCents(100);
+    const c = Money.fromCents(200);
+    expect(a.equals(b)).toBe(true);
+    expect(a.equals(c)).toBe(false);
+  });
 });

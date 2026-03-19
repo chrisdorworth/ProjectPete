@@ -49,7 +49,7 @@ export function createGoldenRecord(sources: MergeSource[]): GoldenRecord {
   for (const source of sorted) {
     for (const [key, value] of Object.entries(source.data)) {
       const current = (record as Record<string, unknown>)[key];
-      if ((current === null || current === undefined) && value !== null && value !== undefined) {
+      if ((current === null || current === undefined || current === 0) && value !== null && value !== undefined) {
         (record as Record<string, unknown>)[key] = value;
       }
     }

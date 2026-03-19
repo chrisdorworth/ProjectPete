@@ -9,6 +9,7 @@ export interface CooldownContext {
   channel: OutreachChannel;
   leadId: string;
   signalType: SignalType;
+  signalDetectedAt: Date;
   lastContactAt: Date | null;
   lastContactChannel: OutreachChannel | null;
   isBereaved: boolean;
@@ -25,9 +26,9 @@ export function checkCooldown(context: CooldownContext, now: Date = new Date()):
   if (context.isBereaved || PROBATE_SIGNALS.includes(context.signalType)) {
     const cooldownDays = BEREAVEMENT_COOLDOWN_DAYS;
     if (!context.lastContactAt) {
-      const signalAge = now.getTime() - now.getTime();
+      const signalAge = now.getTime() - context.signalDetectedAt.getTime();
       if (signalAge < cooldownDays * 24 * 60 * 60 * 1000) {
-        const nextEligible = new Date(now.getTime() + cooldownDays * 24 * 60 * 60 * 1000);
+        const nextEligible = addDays(context.signalDetectedAt, cooldownDays);
         return {
           canContact: false,
           reason: `Bereavement/probate cooldown: ${cooldownDays} days required`,

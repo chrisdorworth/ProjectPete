@@ -31,6 +31,8 @@ export interface LeadMerged extends BaseEvent {
     mergedLeadId: string;
     mergeReason: string;
     matchScore: number;
+    mergedSignalIds: string[];
+    mergedEnrichmentCompleteness: number;
   };
 }
 

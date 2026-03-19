@@ -47,7 +47,7 @@ export function evaluateRetention(
     return { type: "schedule_purge", scheduledDate: purgeDate };
   }
 
-  if (monthsSinceActivity >= RETENTION_REVIEW_MONTHS - 1) {
+  if (monthsSinceActivity >= RETENTION_REVIEW_MONTHS - 2) {
     return { type: "flag_for_review", daysSinceActivity };
   }
 

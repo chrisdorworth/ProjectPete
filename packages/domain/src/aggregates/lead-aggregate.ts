@@ -116,6 +116,14 @@ export function applyEvent(state: LeadState, event: MeridianEvent): LeadState {
       };
     }
 
+    case "LeadMerged":
+      return {
+        ...state,
+        signalIds: [...state.signalIds, ...event.payload.mergedSignalIds],
+        enrichmentCompleteness: Math.max(state.enrichmentCompleteness, event.payload.mergedEnrichmentCompleteness ?? 0),
+        version: event.version,
+      };
+
     case "LeadAssigned":
       return {
         ...state,
@@ -243,21 +251,21 @@ export function applyEvent(state: LeadState, event: MeridianEvent): LeadState {
     case "LeadConverted":
       return {
         ...state,
-        status: "converted",
+        status: canTransition(state.status, "converted") ? "converted" : state.status,
         version: event.version,
       };
 
     case "LeadDisqualified":
       return {
         ...state,
-        status: "disqualified",
+        status: canTransition(state.status, "disqualified") ? "disqualified" : state.status,
         version: event.version,
       };
 
     case "LeadLost":
       return {
         ...state,
-        status: "lost",
+        status: canTransition(state.status, "lost") ? "lost" : state.status,
         version: event.version,
       };
 
